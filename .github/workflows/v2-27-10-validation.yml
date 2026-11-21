@@ -1,0 +1,56 @@
+name: V2.27.10 validation
+
+on:
+  push:
+    branches:
+      - v2.27.10-development
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  syntax-and-integrity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Validate app HTML and inline JavaScript
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const cp = require('node:child_process');
+          const html = fs.readFileSync('SUPRAAKASH_PUJA_COMMITTEE_V2_27_10.html', 'utf8');
+          if (!html.includes('V2.27.10')) throw new Error('V2.27.10 version label missing');
+          const scripts = [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)];
+          let checked = 0;
+          for (const [, attrs, source] of scripts) {
+            if (/type\s*=\s*["'](?:application\/(?:ld\+)?json|importmap)["']/i.test(attrs)) continue;
+            const file = `/tmp/v22710-inline-${checked}.js`;
+            fs.writeFileSync(file, source);
+            const result = cp.spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' });
+            if (result.status !== 0) {
+              process.stderr.write(result.stderr || result.stdout);
+              throw new Error(`Inline script ${checked + 1} failed syntax validation`);
+            }
+            checked++;
+          }
+          if (!checked) throw new Error('No inline JavaScript blocks found');
+          const required = [
+            'issuerMemberId:issuerId',
+            'memberId:hId',
+            'memberId:fId',
+            'admin-add-member',
+            'admin-rename-member',
+            'v227MemberMatches',
+            'v277RefreshMemberPicker'
+          ];
+          for (const token of required) if (!html.includes(token)) throw new Error(`Missing expected implementation: ${token}`);
+          console.log(`Validated ${checked} inline JavaScript blocks and required identity safeguards.`);
+          NODE
+      - name: Type-check Supabase Edge Function
+        run: deno check supabase/functions/committee-auth/index.ts
