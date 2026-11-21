@@ -137,11 +137,11 @@ Deno.serve(async (req) => {
       if (directoryUpdateError) return json({ error: 'Could not update member directory', stage: 'directory_update', ...safeDbError(directoryUpdateError) }, 500);
 
       if (directory.auth_user_id) {
-        const { error: profileUpdateError } = await adminClient.from('committee_profiles')
-          .update({ display_name: displayName }).eq('user_id', directory.auth_user_id);
-        if (profileUpdateError) {
+        const { data: updatedProfile, error: profileUpdateError } = await adminClient.from('committee_profiles')
+          .update({ display_name: displayName }).eq('user_id', directory.auth_user_id).select('user_id').maybeSingle();
+        if (profileUpdateError || !updatedProfile) {
           await adminClient.from('committee_directory').update({ display_name: oldName }).eq('member_id', memberId);
-          return json({ error: 'Profile update failed; directory name was rolled back', stage: 'profile_update', ...safeDbError(profileUpdateError) }, 500);
+          return json({ error: 'Linked committee profile is missing or could not be updated; directory name was rolled back', stage: 'profile_update', ...safeDbError(profileUpdateError) }, 500);
         }
         const { data: authUser, error: authUserError } = await adminClient.auth.admin.getUserById(directory.auth_user_id);
         if (authUserError || !authUser.user) {
