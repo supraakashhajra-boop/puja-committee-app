@@ -833,11 +833,30 @@ $('rf').onsubmit=e=>{e.preventDefault();if(!window.v227CloudReady||!v227User){to
 $('hf').onsubmit=e=>{e.preventDefault();if(window.v227Role!=='admin'){toast('Cash Handover entry শুধুমাত্র Admin করতে পারবেন');return}let hId=v227MemberIdForSelection($('hm').value),hName=v227MemberNameForSelection(hId);if(!hId||!hName){toast('সদস্যের সঠিক Member ID পাওয়া যায়নি। Handover সংরক্ষণ করা হয়নি।');return}let h={member:hName,memberId:hId,amount:+$('ha').value,receivedBy:$('hr').value,date:$('hd').value};db.handovers.push(h);e.target.reset();log('Cash handover',`${h.member} → ${h.receivedBy}: ${fmt(h.amount)}`)};
 $('ff').onsubmit=e=>{e.preventDefault();if(window.v227Role!=='admin'){toast('Finance entry শুধুমাত্র Admin করতে পারবেন');return}let fId=v227MemberIdForSelection($('fm').value),fName=v227MemberNameForSelection(fId);if(!fId||!fName){toast('সদস্যের সঠিক Member ID পাওয়া যায়নি। Finance entry সংরক্ষণ করা হয়নি।');return}let f={type:$('ft').value,category:$('fc').value,amount:+$('fa').value,date:$('fd').value,member:fName,memberId:fId};db.finance.push(f);e.target.reset();log('Finance entry',`${f.type} · ${f.category} · ${fmt(f.amount)}`)};
 
-function addMember(){if(window.v227Role!=='admin'){toast('শুধুমাত্র Admin সদস্য পরিচালনা করতে পারবেন');return}toast('নতুন সদস্য যোগ করতে Committee Directory-তে নাম ও Member ID একসঙ্গে তৈরি করতে হবে। নিরাপত্তার কারণে Local-only Add বন্ধ রাখা হয়েছে।')}
-function renameMember(enc){
- if(window.v227Role!=='admin'){toast('শুধুমাত্র Admin সদস্যের তথ্য পরিবর্তন করতে পারবেন');return}
- const old=decodeURIComponent(enc),memberId=v227MemberIdForSelection(old),memberName=v227MemberNameForSelection(memberId);
- toast('Member '+memberName+' · ID '+(memberId||'Not found')+'-এর নাম পরিবর্তনের জন্য Committee Directory ও Login Profile একসঙ্গে আপডেট করতে হবে। নিরাপত্তার কারণে Local-only rename বন্ধ রাখা হয়েছে।');
+async function addMember(){
+ if(window.v227Role!=='admin'||!window.v227CloudReady){toast('সদস্য যোগ করতে Admin Cloud Login প্রয়োজন');return}
+ const memberId=String(prompt('নতুন Member ID লিখুন (যেমন MEMBER025):')||'').trim().toUpperCase();if(!memberId)return;
+ const displayName=String(prompt('নতুন সদস্যের সম্পূর্ণ নাম লিখুন:')||'').trim();if(!displayName)return;
+ try{
+  await v227Call('admin-add-member',{memberId,displayName});
+  await v227LoadMemberDirectory();refreshMemberSelects();draw();
+  try{const issued=await v227Call('issue-code',{memberId});prompt('সদস্যের Activation Code (২৪ ঘণ্টা বৈধ)। সদস্যকে নিরাপদে দিন:',issued.activationCode);}
+  catch(codeError){toast('সদস্য তৈরি হয়েছে, কিন্তু Activation Code তৈরি হয়নি: '+codeError.message);}
+  toast('Member '+displayName+' · '+memberId+' তৈরি হয়েছে। Login ID অপরিবর্তিত থাকবে।');
+ }catch(error){toast('Member তৈরি হয়নি: '+error.message);}
+}
+async function renameMember(enc){
+ if(window.v227Role!=='admin'||!window.v227CloudReady){toast('নাম পরিবর্তন করতে Admin Cloud Login প্রয়োজন');return}
+ const memberId=v227MemberIdForSelection(decodeURIComponent(enc)),oldName=v227MemberNameForSelection(memberId);
+ if(!memberId||!oldName){toast('সঠিক Member ID পাওয়া যায়নি');return}
+ const displayName=String(prompt('Member ID '+memberId+'-এর নতুন নাম লিখুন:',oldName)||'').trim();if(!displayName||displayName===oldName)return;
+ try{
+  await v227Call('admin-rename-member',{memberId,displayName});
+  await v227LoadMemberDirectory();refreshMemberSelects();
+  if(v227CurrentMemberId()===memberId)v227User.displayName=displayName;
+  draw();if(currentMemberOpen===memberId)openMember(encodeURIComponent(memberId));
+  toast('নাম পরিবর্তন হয়েছে। Member ID '+memberId+' অপরিবর্তিত আছে।');
+ }catch(error){toast('নাম পরিবর্তন হয়নি: '+error.message);}
 }
 
 
@@ -1087,7 +1106,7 @@ window.addEventListener('load',()=>{try{v275Init();}catch(e){console.error('V2.2
  const originalDraw=window.draw;
  if(typeof originalDraw==='function')window.draw=function(){originalDraw();renderAll();};
  const originalHydrate=window.v227Hydrate;
- if(typeof originalHydrate==='function')window.v227Hydrate=async function(){await originalHydrate();renderAll();if(admin())createSnapshot(false).catch(e=>console.warn('V2.27.7 automatic snapshot:',e.message));};
+ if(typeof originalHydrate==='function')window.v227Hydrate=async function(){await originalHydrate();renderAll();window.v277RefreshMemberPicker?.();window.v277DrawCollections?.();if(admin())createSnapshot(false).catch(e=>console.warn('V2.27.7 automatic snapshot:',e.message));};
  window.addEventListener('load',()=>{
    try{
      db.cashbook=db.cashbook||[];
@@ -1118,6 +1137,7 @@ window.addEventListener('load',()=>{try{v275Init();}catch(e){console.error('V2.2
  function drawCollections(){ensure();const h=$('v277HelpingRows'),c=$('v277CommitteeRows');if(h)h.innerHTML=db.helpingCollections.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.mobile||'—')}</td><td>${money(x.amount)}</td><td>${esc(x.mode)}</td><td>${x.mobile?`<button class="smallbtn" onclick="v277WhatsApp('help','${esc(x.id)}')">WhatsApp</button>`:'—'}</td></tr>`).join('')||'<tr><td colspan="6">No helping member contributions</td></tr>';
  if(c)c.innerHTML=db.committeeCollections.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(x=>`<tr><td>${esc(x.date)}</td><td>${esc(x.memberName)}</td><td>${esc(x.memberId)}</td><td>${money(x.amount)}</td><td>${esc(x.mode)}</td><td>${x.mobile?`<button class="smallbtn" onclick="v277WhatsApp('committee','${esc(x.id)}')">WhatsApp</button>`:'—'}</td></tr>`).join('')||'<tr><td colspan="6">No committee contributions</td></tr>';
  }
+ window.v277RefreshMemberPicker=refreshMemberPicker;window.v277DrawCollections=drawCollections;
  function renderDashboard(){
    const receipts=db.receipts||[],finance=db.finance||[],sponsors=db.sponsors||[],helpers=db.helpingCollections||[],committee=db.committeeCollections||[];
    const income=receipts.reduce((a,x)=>a+Number(x.paidAmount||0),0)+finance.filter(x=>x.type!=='Expense').reduce((a,x)=>a+Number(x.amount||0),0)+sponsors.reduce((a,x)=>a+Number(x.amount||0),0)+helpers.reduce((a,x)=>a+Number(x.amount||0),0)+committee.reduce((a,x)=>a+Number(x.amount||0),0);
