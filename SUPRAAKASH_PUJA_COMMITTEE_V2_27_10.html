@@ -839,7 +839,7 @@ async function addMember(){
  const displayName=String(prompt('নতুন সদস্যের সম্পূর্ণ নাম লিখুন:')||'').trim();if(!displayName)return;
  try{
   await v227Call('admin-add-member',{memberId,displayName});
-  await v227LoadMemberDirectory();refreshMemberSelects();draw();
+  await v227LoadMemberDirectory();refreshMemberSelects();window.v277RefreshMemberPicker?.();window.v277DrawCollections?.();draw();
   try{const issued=await v227Call('issue-code',{memberId});prompt('সদস্যের Activation Code (২৪ ঘণ্টা বৈধ)। সদস্যকে নিরাপদে দিন:',issued.activationCode);}
   catch(codeError){toast('সদস্য তৈরি হয়েছে, কিন্তু Activation Code তৈরি হয়নি: '+codeError.message);}
   toast('Member '+displayName+' · '+memberId+' তৈরি হয়েছে। Login ID অপরিবর্তিত থাকবে।');
@@ -852,7 +852,7 @@ async function renameMember(enc){
  const displayName=String(prompt('Member ID '+memberId+'-এর নতুন নাম লিখুন:',oldName)||'').trim();if(!displayName||displayName===oldName)return;
  try{
   await v227Call('admin-rename-member',{memberId,displayName});
-  await v227LoadMemberDirectory();refreshMemberSelects();
+  await v227LoadMemberDirectory();refreshMemberSelects();window.v277RefreshMemberPicker?.();window.v277DrawCollections?.();
   if(v227CurrentMemberId()===memberId)v227User.displayName=displayName;
   draw();if(currentMemberOpen===memberId)openMember(encodeURIComponent(memberId));
   toast('নাম পরিবর্তন হয়েছে। Member ID '+memberId+' অপরিবর্তিত আছে।');
@@ -865,7 +865,7 @@ function openMember(enc){
  let rr=db.receipts.filter(r=>record?v227MemberMatches(r,String(record.member_id),'issuerMemberId','issuer'):false),paid=rr.reduce((v,r)=>v+Number(r.paidAmount||0),0),bill=rr.reduce((v,r)=>v+Number(r.billAmount||0),0);
  $('memberDetail').style.display='block';$('memberDetailTitle').textContent=n+' — Receipt / Bill History';
  $('memberDetailSummary').textContent=rr.length+' receipts · Bill '+fmt(bill)+' · Paid '+fmt(paid)+' · Pending '+fmt(Math.max(0,bill-paid));
- $('memberHistoryRows').innerHTML=rr.map(r=>`<tr><td>${r.serial}</td><td>${r.donor}</td><td>${fmt(r.billAmount)}</td><td>${fmt(r.paidAmount)}</td><td>${fmt(r.balance)}</td><td>${r.status}</td><td>${r.date}</td><td><button class="smallbtn" onclick="showPaymentHistory('${r.serial}')">History</button> ${(window.v227Role==='admin'||(window.v227Role==='member'&&v227User?.displayName===n))?`<button class="smallbtn" onclick="updatePayment('${r.serial}')">Update</button>`:'<span class="muted">Owner only</span>'}</td></tr>`).join('')||'<tr><td colspan="8">এই সদস্যের কোনো Receipt নেই</td></tr>';
+ $('memberHistoryRows').innerHTML=rr.map(r=>`<tr><td>${r.serial}</td><td>${r.donor}</td><td>${fmt(r.billAmount)}</td><td>${fmt(r.paidAmount)}</td><td>${fmt(r.balance)}</td><td>${r.status}</td><td>${r.date}</td><td><button class="smallbtn" onclick="showPaymentHistory('${r.serial}')">History</button> ${(window.v227Role==='admin'||(window.v227Role==='member'&&v227CurrentMemberId()===String(record?.member_id||'')))?`<button class="smallbtn" onclick="updatePayment('${r.serial}')">Update</button>`:'<span class="muted">Owner only</span>'}</td></tr>`).join('')||'<tr><td colspan="8">এই সদস্যের কোনো Receipt নেই</td></tr>';
  $('receiptPaymentHistory').innerHTML='';
  $('memberDetail').scrollIntoView({behavior:'smooth',block:'start'});
 }
