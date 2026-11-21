@@ -43,7 +43,7 @@ File: supabase/functions/committee-auth/index.ts
 ## Automated checks
 - Added GitHub Actions workflow: .github/workflows/v2-27-10-validation.yml.
 - It checks every inline app JavaScript block, required ID safeguards, and type-checks the Edge Function.
-- Passed on the latest application/backend commit: GitHub Actions run 44934120371 (inline JavaScript validation and Deno type-check both successful).
+- Passed on the latest application commit: GitHub Actions run 44934222855 (inline JavaScript validation and Deno type-check both successful).
 
 ## Still required before production
 1. Confirm GitHub Actions validation result is green; fix any failures.
